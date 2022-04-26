@@ -161,8 +161,6 @@ class GT(nn.Module):
         h = h[seqs]
         if self.glo:
             h = torch.cat([h,self.globalembedding.expand(h.shape[0],-1,-1)],dim=1)
-        if self.pre != 0:
-            h = F.relu(self.prelayers(h))
         for layer in range(self.num_layers):
             h = self.GTLayers[layer](h)
         #h = h[:,0,:] + h[:,1:,:].mean(dim=1)

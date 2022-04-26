@@ -163,28 +163,15 @@ def run_model_DBLP(args):
             start = node_seq[n, scnt].item()    
         n += 1
 
-    all_adjs = []
-
-    for i in range(features_list[0].shape[0]):
-        sg = dgl.node_subgraph(g, node_seq[i]).adj().to_dense().unsqueeze(0)
-        all_adjs.append(sg)
-
-    all_adjs = torch.cat(all_adjs).to(device)
-
     train_seq = node_seq[train_idx]
     val_seq = node_seq[val_idx]
     test_seq = node_seq[test_idx]
-
-    train_adjs = all_adjs[train_idx]
-    val_adjs = all_adjs[val_idx]
-    test_adjs = all_adjs[test_idx]
 
     micro_f1 = torch.zeros(args.repeat)
     macro_f1 = torch.zeros(args.repeat)
 
     num_classes = dl.labels_train['num_classes']
     node_type = [features.shape[0] for features in features_list]
-    type_emb = torch.eye(len(node_type)).to(device)
 
     g = g.to(device)
 

@@ -9,10 +9,10 @@ import dgl
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from GT import AGT, GT, RGT
 from utils.data import load_data
 from utils.pytorchtools import EarlyStopping
-
-from GT import GT, RGT, AGT
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -166,14 +166,28 @@ def run_model_DBLP(args):
             start = node_seq[n, scnt].item()
         n += 1
 
+    all_adjs = []
+
+    for i in range(features_list[0].shape[0]):
+        sg = dgl.node_subgraph(g, node_seq[i]).adj().to_dense().unsqueeze(0)
+        all_adjs.append(sg)
+
+    all_adjs = torch.cat(all_adjs).to(device)
+
     train_seq = node_seq[train_idx]
     val_seq = node_seq[val_idx]
     test_seq = node_seq[test_idx]
+
+    train_adjs = all_adjs[train_idx]
+    val_adjs = all_adjs[val_idx]
+    test_adjs = all_adjs[test_idx]
 
     micro_f1 = torch.zeros(args.repeat)
     macro_f1 = torch.zeros(args.repeat)
 
     num_classes = dl.labels_train['num_classes']
+    node_type = [features.shape[0] for features in features_list]
+    type_emb = torch.eye(len(node_type)).to(device)
 
     g = g.to(device)
 
@@ -181,7 +195,8 @@ def run_model_DBLP(args):
 
         loss = torch.nn.BCELoss()
 
-        net = GT(num_classes, in_dims, args.hidden_dim, args.ffn_dim, args.num_layers, args.num_heads, args.dropout, num_glo = args.num_g)
+        net = RGT(num_classes, in_dims, args.hidden_dim, args.ffn_dim, args.num_layers, args.num_heads, args.dropout,
+                  activation='relu', num_glo=args.num_g, rl_dimension=4, ifcat=args.ifcat, GNN=args.rl_type)
 
         net.to(device)
         optimizer = torch.optim.AdamW(
@@ -197,7 +212,8 @@ def run_model_DBLP(args):
             # training
             net.train()
 
-            logits = net(features_list, train_seq, args.usenorm)
+            logits = net(features_list, train_seq, type_emb,
+                         node_type, train_adjs, K=args.K, norm=args.usenorm)
             logp = F.sigmoid(logits)
             train_loss = loss(logp, labels[train_idx])
 
@@ -221,7 +237,8 @@ def run_model_DBLP(args):
             net.eval()
             with torch.no_grad():
                 #logits = net(features_list, val_seq, type_emb,node_type, val_adjs, args.K)
-                logits = net(features_list, val_seq, args.usenorm)
+                logits = net(features_list, val_seq, type_emb,
+                             node_type, val_adjs, K=args.K, norm=args.usenorm)
                 logp = F.sigmoid(logits)
                 val_loss = loss(logp, labels[val_idx])
                 pred = (logits.cpu().numpy() > 0).astype(int)
@@ -244,7 +261,8 @@ def run_model_DBLP(args):
             'checkpoint/gt_{}_{}.pt'.format(args.dataset, args.num_layers)))
         net.eval()
         with torch.no_grad():
-            logits = net(features_list, test_seq, args.usenorm)
+            logits = net(features_list, test_seq, type_emb,
+                         node_type, test_adjs, K=args.K, norm=args.usenorm)
             test_logits = logits
             pred = (test_logits.cpu().numpy() > 0).astype(int)
             if args.mode == 1:
@@ -296,12 +314,12 @@ if __name__ == '__main__':
     ap.add_argument('--len-seq', type=int, default=120)
     ap.add_argument('--drop-ratio', type=float, default=1)
     ap.add_argument('--usenorm', type=bool, default=False)
-    ap.add_argument('--rl_type', type=str, default='GIN')
-    ap.add_argument('--rl_node', type=bool, default=False)
-    ap.add_argument('--is_add', type=bool, default=False)
+    ap.add_argument('--rl_type', type=str, default='SAGE')
     ap.add_argument('--K', type=int, default=3)
     ap.add_argument('--dataset', type=str)
     ap.add_argument('--mode', type=int, default=0)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--ifcat', type=bool, default=True)
+
     args = ap.parse_args()
     run_model_DBLP(args)

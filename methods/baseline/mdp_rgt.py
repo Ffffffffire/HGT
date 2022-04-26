@@ -163,7 +163,6 @@ def run_model_DBLP(args):
                     break
             scnt += 1
             start = node_seq[n, scnt].item()
-            start_pos = scnt
         n += 1
 
     all_adjs = []
