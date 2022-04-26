@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from GT import AGT, GT, RGT
+from GT import GT
 from utils.data import load_data
 from utils.pytorchtools import EarlyStopping
 
