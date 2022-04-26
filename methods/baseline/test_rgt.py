@@ -150,6 +150,8 @@ def run_model_DBLP(args):
 
     node_seq = torch.zeros(g.num_nodes(), args.len_seq).long()
 
+    print("test!")
+
     n = 0
 
     for x in all_nodes:
