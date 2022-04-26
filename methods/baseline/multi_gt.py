@@ -18,10 +18,6 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.append('../../')
 
-
-#from utils.tools import index_generator, evaluate_results_nc, parse_minibatch
-
-
 def sp_to_spt(mat):
     coo = mat.tocoo()
     values = coo.data

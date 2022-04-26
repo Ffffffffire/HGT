@@ -115,170 +115,6 @@ class GTLayer(nn.Module):
 
         return h2
 
-class AGTLayer(nn.Module):
-    def __init__(self, embeddings_dimension, ffn_dimension, nheads=2, dropout=0.5, rl=False, rl_dim=4):
-        '''
-            embeddings_dimension: d = dp = dk = dq
-            multi-heads: n
-            
-        '''
-
-        super(AGTLayer, self).__init__()
-
-        self.nheads = nheads
-        self.embeddings_dimension = embeddings_dimension
-        self.dropout = dropout
-
-        self.head_dim = self.embeddings_dimension // self.nheads
-
-        self.rl_dim = rl_dim
-
-        self.linear_w = nn.Linear(self.embeddings_dimension, self.head_dim * self.nheads, bias=False)
-        self.att_source = nn.Linear(self.head_dim * self.nheads, self.nheads, bias = False)
-        self.att_target = nn.Linear(self.head_dim * self.nheads, self.nheads, bias = False)
-
-        if rl:
-            self.r_k = nn.Linear(rl_dim, rl_dim, bias=False)
-            self.r_q = nn.Linear(rl_dim, rl_dim, bias=False)
-
-        self.linear_final = nn.Linear(
-            self.head_dim * self.nheads, self.embeddings_dimension, bias=False)
-        self.dropout = nn.Dropout(self.dropout)
-
-        self.FFN1 = nn.Linear(embeddings_dimension, ffn_dimension, bias=True)
-        self.FFN2 = nn.Linear(ffn_dimension, embeddings_dimension, bias=True)
-        self.fdropout = nn.Dropout(p=dropout)
-        self.LN1 = nn.LayerNorm(embeddings_dimension)
-        self.LN2 = nn.LayerNorm(embeddings_dimension)
-        self.dropout1 = nn.Dropout(p=dropout)
-        self.dropout2 = nn.Dropout(p=dropout)
-
-        #self.reset_parameters()
-
-    def reset_parameters(self):
-        def reset(tensor):
-            stdv = math.sqrt(6.0 / (tensor.size(-2) + tensor.size(-1)))
-            tensor.data.uniform_(-stdv, stdv)
-
-        reset(self.linear_k.weight)
-        reset(self.linear_q.weight)
-        reset(self.linear_v.weight)
-        reset(self.linear_final.weight)
-        reset(self.FFN1.weight)
-        reset(self.FFN2.weight)
-
-    def forward(self, h, rh=None, mask=None, e=1e-12):
-        fh = self.linear_w(h)
-        batch_size = fh.size()[0]
-        fh_ = fh.view(batch_size, self.nheads, -1, self.head_dim)
-        
-
-        a_source = self.att_source(fh).view(batch_size, self.nheads, -1, 1)
-        a_target = self.att_target(fh).view(batch_size, self.nheads, 1, -1)
-        
-        score = F.softmax(a_source + a_target, dim=-1)
-
-        if rh is not None:
-            r_k = self.r_k(rh)
-            r_q = self.r_q(rh)
-            r_k_ = r_k.unsqueeze(1)
-            r_q_ = r_q.unsqueeze(1)
-            r_k_t = r_k_.view(batch_size, 1, self.rl_dim, length)
-            score += (r_q_ @ r_k_t) / 2
-
-        context = score @ fh_
-
-        h_sa = context.view(batch_size, -1, self.head_dim * self.nheads)
-        h_sa = self.linear_final(h_sa)
-        h_sa = self.dropout(h_sa)
-
-        h1 = self.LN1(h_sa + h)
-        h1 = self.dropout1(h1)
-
-        hf = self.FFN1(h1)
-        hf = self.fdropout(F.relu(hf))
-        hf = self.FFN2(hf)
-
-        h2 = self.LN2(hf + h1)
-        h2 = self.dropout2(h2)
-
-        return h2
-
-class AGT(nn.Module):
-    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, pre=0, pro=0, num_glo=0):
-        '''
-            embeddings_dimension: d = dp = dk = dq
-            multi-heads: n
-            
-        '''
-
-        super(AGT, self).__init__()
-
-        self.embeddings_dimension = embeddings_dimension
-        self.num_layers = num_layers
-        self.num_class = num_class
-        self.nheads = nheads
-        self.fc_list = nn.ModuleList([nn.Linear(
-            in_dim, embeddings_dimension, bias=False) for in_dim in input_dimensions])
-        self.glo = num_glo > 0
-        self.pre = pre
-        self.pro = pro
-
-        if self.glo:
-            gain = nn.init.calculate_gain('relu')
-            self.globalembedding = torch.nn.Parameter(
-                torch.empty(num_glo, embeddings_dimension))
-            nn.init.xavier_normal_(self.globalembedding, gain)
-
-        self.dropout = dropout
-
-        if self.pre == 1:
-            self.prelayers = nn.Linear(
-                embeddings_dimension, embeddings_dimension, bias=False)
-        elif self.pre == 2:
-            self.prelayers = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(
-            ), nn.Linear(embeddings_dimension, embeddings_dimension, bias=False))
-
-        self.GTLayers = torch.nn.ModuleList()
-        for layer in range(self.num_layers):
-            self.GTLayers.append(
-                AGTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout))
-        if self.pro == 0:
-            self.Prediction = nn.Linear(
-                embeddings_dimension, num_class, bias=False)
-        else:
-            self.Prediction = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(
-            ), nn.Linear(embeddings_dimension, num_class, bias=False))
-
-    def reset_parameters(self):
-        def reset(tensor):
-            stdv = math.sqrt(6.0 / (tensor.size(-2) + tensor.size(-1)))
-            tensor.data.uniform_(-stdv, stdv)
-
-        for fc in self.fc_list:
-            reset(fc.weight)
-
-        reset(self.rl_self.weight)
-        reset(self.rl_neigh.weight)
-        reset(self.Prediction.weight)
-
-    def forward(self, features_list, seqs, usemean=False, norm=False):
-        h = []
-        for fc, feature in zip(self.fc_list, features_list):
-            h.append(fc(feature))
-        h = torch.cat(h, 0)
-        h = h[seqs]
-        if self.glo:
-            h = torch.cat(
-                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
-        for layer in range(self.num_layers):
-            h = self.GTLayers[layer](h)
-        output = self.Prediction(h[:, 0, :])
-        if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
-        return output
-
-
 class GT(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension = 128, num_layers=8, nheads=2, dropout=0, activation = 'relu', pre=0, pro=0, num_glo = 0):
         '''
@@ -296,8 +132,6 @@ class GT(nn.Module):
         self.fc_list = nn.ModuleList([nn.Linear(
             in_dim, embeddings_dimension, bias=False) for in_dim in input_dimensions])
         self.glo = num_glo > 0
-        self.pre = pre
-        self.pro = pro
 
         if self.glo:     
             self.globalembedding = torch.nn.Parameter(torch.empty(num_glo, embeddings_dimension))
@@ -305,20 +139,11 @@ class GT(nn.Module):
 
         self.dropout = dropout
 
-        if self.pre == 1:
-            self.prelayers = nn.Linear(embeddings_dimension, embeddings_dimension, bias = False)
-        elif self.pre == 2:
-            self.prelayers = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False),nn.ReLU(),nn.Linear(embeddings_dimension, embeddings_dimension, bias=False))
-        
-
         self.GTLayers = torch.nn.ModuleList()
         for layer in range(self.num_layers):
             self.GTLayers.append(
                 GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation=activation))
-        if self.pro == 0:
-            self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
-        else:
-            self.Prediction = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False),nn.ReLU(),nn.Linear(embeddings_dimension, num_class, bias=False))
+        self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
         #self.reset_parameters()
 
     def reset_parameters(self):
@@ -347,7 +172,7 @@ class GT(nn.Module):
         return output
 
 class RGT(nn.Module):
-    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, rl_dimension=4, ifcat=True, activation='relu', pre=0, pro=0, num_glo = 0):
+    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=4, dropout=0.5, rl_dimension=4, ifcat=True, GNN='SAGE', activation='relu', num_glo = 0):
 
         super(RGT, self).__init__()
 
@@ -356,6 +181,8 @@ class RGT(nn.Module):
         self.num_class = num_class
         self.nheads = nheads
         self.ifcat = ifcat
+        self.gnn = GNN
+
         if self.ifcat:
             self.fc_list = nn.ModuleList([nn.Linear(
                 in_dim, embeddings_dimension-rl_dimension, bias=False) for in_dim in input_dimensions])
@@ -364,34 +191,29 @@ class RGT(nn.Module):
                 in_dim, embeddings_dimension, bias=False) for in_dim in input_dimensions])
         self.dropout = dropout
         self.glo = num_glo > 0
-        self.pre = pre
-        self.pro = pro
 
         if self.glo:
             gain = nn.init.calculate_gain('relu')     
             self.globalembedding = torch.nn.Parameter(torch.empty(num_glo, embeddings_dimension))
             nn.init.xavier_normal_(self.globalembedding, gain)
 
-        self.rl_first = nn.Linear(4, rl_dimension)
+        #self.rl_first = nn.Linear(4, rl_dimension, bias=False)
 
-        self.rl_self = nn.Linear(rl_dimension, rl_dimension // 2, bias=False)
-        self.rl_neighbor = nn.Linear(rl_dimension, rl_dimension // 2, bias=False)
+        if self.gnn == 'SAGE':
+            self.rl_self = nn.Linear(rl_dimension, rl_dimension // 2, bias=False)
+            self.rl_neighbor = nn.Linear(rl_dimension, rl_dimension // 2, bias=False)
+        elif self.gnn == 'GCN':
+            self.rl_w = nn.Linear(rl_dimension, rl_dimension, bias=False)
+        elif self.gnn == 'GIN':
+            self.rl_w = nn.Sequential(
+                nn.Linear(rl_dimension, rl_dimension, bias=False), nn.ReLU, nn.Linear(rl_dimension, rl_dimension, bias=False))
 
         self.GTLayers = torch.nn.ModuleList()
         for layer in range(self.num_layers):
             self.GTLayers.append(
                 GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation, self.ifcat==False, rl_dimension))
-        if self.pre == 1:
-            self.prelayers = nn.Linear(
-                embeddings_dimension, embeddings_dimension, bias=False)
-        elif self.pre == 2:
-            self.prelayers = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(), nn.Linear(embeddings_dimension, embeddings_dimension, bias=False))
         
-        if self.pro == 0:
-            self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
-        else:
-            self.Prediction = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False),nn.ReLU(),nn.Linear(embeddings_dimension, num_class, bias=False))
-
+        self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
         
 
     def reset_parameters(self):
@@ -435,8 +257,8 @@ class RGT(nn.Module):
         node_type = [i for i, z in zip(
             range(len(node_type)), node_type) for x in range(z)]
         r_0 = type_emb[node_type]
-        r_0 = r_0[seqs]
-        r = self.rl_first(r_0)       
+        r = r_0[seqs]
+        #r = self.rl_first(r_0)       
         masks = torch.zeros(adjs.shape).to(torch.device('cuda:0'))
         r[:, 0, :] = r[:, 0, :] * 2
         for _ in range(K):
@@ -447,7 +269,7 @@ class RGT(nn.Module):
             output_self = self.rl_self(r)
             output_neighbor = self.rl_neighbor(neighbor)
             r = torch.cat([output_self, output_neighbor], dim=2)
-            r = F.relu(r)
+            #r = F.relu(r)
             if norm:
                 r =  r / (torch.norm(r, dim=2, keepdim=True)+1e-12)
         return r
@@ -867,4 +689,157 @@ class RGT_v5(nn.Module):
             r = F.relu(r)
         r = r[:,0,:]
         return r
+
+class AGTLayer(nn.Module):
+    def __init__(self, embeddings_dimension, ffn_dimension, nheads=2, dropout=0.5, rl=False, rl_dim=4):
+
+        super(AGTLayer, self).__init__()
+
+        self.nheads = nheads
+        self.embeddings_dimension = embeddings_dimension
+        self.dropout = dropout
+
+        self.head_dim = self.embeddings_dimension // self.nheads
+
+        self.rl_dim = rl_dim
+
+        self.linear_w = nn.Linear(self.embeddings_dimension, self.head_dim * self.nheads, bias=False)
+        self.att_source = nn.Linear(self.head_dim * self.nheads, self.nheads, bias = False)
+        self.att_target = nn.Linear(self.head_dim * self.nheads, self.nheads, bias = False)
+
+        if rl:
+            self.r_k = nn.Linear(rl_dim, rl_dim, bias=False)
+            self.r_q = nn.Linear(rl_dim, rl_dim, bias=False)
+
+        self.linear_final = nn.Linear(
+            self.head_dim * self.nheads, self.embeddings_dimension, bias=False)
+        self.dropout = nn.Dropout(self.dropout)
+
+        self.FFN1 = nn.Linear(embeddings_dimension, ffn_dimension, bias=True)
+        self.FFN2 = nn.Linear(ffn_dimension, embeddings_dimension, bias=True)
+        self.fdropout = nn.Dropout(p=dropout)
+        self.LN1 = nn.LayerNorm(embeddings_dimension)
+        self.LN2 = nn.LayerNorm(embeddings_dimension)
+        self.dropout1 = nn.Dropout(p=dropout)
+        self.dropout2 = nn.Dropout(p=dropout)
+
+        #self.reset_parameters()
+
+    def reset_parameters(self):
+        def reset(tensor):
+            stdv = math.sqrt(6.0 / (tensor.size(-2) + tensor.size(-1)))
+            tensor.data.uniform_(-stdv, stdv)
+
+        reset(self.linear_k.weight)
+        reset(self.linear_q.weight)
+        reset(self.linear_v.weight)
+        reset(self.linear_final.weight)
+        reset(self.FFN1.weight)
+        reset(self.FFN2.weight)
+
+    def forward(self, h, rh=None, mask=None, e=1e-12):
+        fh = self.linear_w(h)
+        batch_size = fh.size()[0]
+        fh_ = fh.view(batch_size, self.nheads, -1, self.head_dim)
+        
+
+        a_source = self.att_source(fh).view(batch_size, self.nheads, -1, 1)
+        a_target = self.att_target(fh).view(batch_size, self.nheads, 1, -1)
+        
+        score = F.softmax(a_source + a_target, dim=-1)
+
+        if rh is not None:
+            r_k = self.r_k(rh)
+            r_q = self.r_q(rh)
+            r_k_ = r_k.unsqueeze(1)
+            r_q_ = r_q.unsqueeze(1)
+            r_k_t = r_k_.view(batch_size, 1, self.rl_dim, length)
+            score += (r_q_ @ r_k_t) / 2
+
+        context = score @ fh_
+
+        h_sa = context.view(batch_size, -1, self.head_dim * self.nheads)
+        h_sa = self.linear_final(h_sa)
+        h_sa = self.dropout(h_sa)
+
+        h1 = self.LN1(h_sa + h)
+        h1 = self.dropout1(h1)
+
+        hf = self.FFN1(h1)
+        hf = self.fdropout(F.relu(hf))
+        hf = self.FFN2(hf)
+
+        h2 = self.LN2(hf + h1)
+        h2 = self.dropout2(h2)
+
+        return h2
+
+class AGT(nn.Module):
+    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, pre=0, pro=0, num_glo=0):
+
+        super(AGT, self).__init__()
+
+        self.embeddings_dimension = embeddings_dimension
+        self.num_layers = num_layers
+        self.num_class = num_class
+        self.nheads = nheads
+        self.fc_list = nn.ModuleList([nn.Linear(
+            in_dim, embeddings_dimension, bias=False) for in_dim in input_dimensions])
+        self.glo = num_glo > 0
+        self.pre = pre
+        self.pro = pro
+
+        if self.glo:
+            gain = nn.init.calculate_gain('relu')
+            self.globalembedding = torch.nn.Parameter(
+                torch.empty(num_glo, embeddings_dimension))
+            nn.init.xavier_normal_(self.globalembedding, gain)
+
+        self.dropout = dropout
+
+        if self.pre == 1:
+            self.prelayers = nn.Linear(
+                embeddings_dimension, embeddings_dimension, bias=False)
+        elif self.pre == 2:
+            self.prelayers = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(
+            ), nn.Linear(embeddings_dimension, embeddings_dimension, bias=False))
+
+        self.GTLayers = torch.nn.ModuleList()
+        for layer in range(self.num_layers):
+            self.GTLayers.append(
+                AGTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout))
+        if self.pro == 0:
+            self.Prediction = nn.Linear(
+                embeddings_dimension, num_class, bias=False)
+        else:
+            self.Prediction = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(
+            ), nn.Linear(embeddings_dimension, num_class, bias=False))
+
+    def reset_parameters(self):
+        def reset(tensor):
+            stdv = math.sqrt(6.0 / (tensor.size(-2) + tensor.size(-1)))
+            tensor.data.uniform_(-stdv, stdv)
+
+        for fc in self.fc_list:
+            reset(fc.weight)
+
+        reset(self.rl_self.weight)
+        reset(self.rl_neigh.weight)
+        reset(self.Prediction.weight)
+
+    def forward(self, features_list, seqs, usemean=False, norm=False):
+        h = []
+        for fc, feature in zip(self.fc_list, features_list):
+            h.append(fc(feature))
+        h = torch.cat(h, 0)
+        h = h[seqs]
+        if self.glo:
+            h = torch.cat(
+                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
+        for layer in range(self.num_layers):
+            h = self.GTLayers[layer](h)
+        output = self.Prediction(h[:, 0, :])
+        if norm:
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+        return output
 '''
