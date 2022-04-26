@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from GT import GT, RGT, AGT
+from GT import AGT, GT, RGT
 from utils.data import load_data
 from utils.pytorchtools import EarlyStopping
 
@@ -160,8 +160,7 @@ def run_model_DBLP(args):
                 if cnt == args.len_seq:
                     break
             scnt += 1
-            start = node_seq[n, scnt].item()
-            start_pos = scnt
+            start = node_seq[n, scnt].item()    
         n += 1
 
     all_adjs = []
