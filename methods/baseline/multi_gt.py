@@ -9,10 +9,10 @@ import dgl
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from GT import GT
 from utils.data import load_data
 from utils.pytorchtools import EarlyStopping
-
-from GT import GT, RGT, AGT
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
