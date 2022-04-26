@@ -116,7 +116,7 @@ class GTLayer(nn.Module):
         return h2
 
 class GT(nn.Module):
-    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension = 128, num_layers=8, nheads=2, dropout=0, activation = 'relu', pre=0, pro=0, num_glo = 0):
+    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension = 128, num_layers=8, nheads=2, dropout=0, activation = 'relu', num_glo = 0):
         '''
             embeddings_dimension: d = dp = dk = dq
             multi-heads: n
@@ -241,8 +241,6 @@ class RGT(nn.Module):
         if self.glo:
             h = torch.cat(
                 [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
-        if self.pre:
-            h = F.relu(self.pre(h))
         for layer in range(self.num_layers):
             if self.ifcat:
                 h = self.GTLayers[layer](h)
