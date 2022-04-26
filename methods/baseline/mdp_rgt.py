@@ -319,7 +319,6 @@ if __name__ == '__main__':
     ap.add_argument('--mode', type=int, default=0)
     ap.add_argument('--seed', type=int, default=2)
     ap.add_argument('--ifcat', type=bool, default=True)
-    ap.add_argument('--rl-dim', type=int, default=4)
 
     args = ap.parse_args()
     run_model_DBLP(args)
