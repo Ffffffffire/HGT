@@ -82,7 +82,7 @@ def mixup_data(x, y, alpha=0.5):
     alpha = np.random.beta(alpha, alpha)
     index = torch.randperm(x.size()[0]).cuda()
     x_a, x_b = x, x[index,:]
-    y_a, y_b = y, y[index,:]
+    y_a, y_b = y, y[index]
     return x_a, x_b, y_a, y_b, alpha
 
 def run_model_DBLP(args):
