@@ -222,7 +222,7 @@ class GT_SSL(nn.Module):
                 [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
         for layer in range(self.num_layers):
             h = self.GTLayers[layer](h)
-        output_ssl = self.ssl_pre(h).squeeze(2)
+        output_ssl = self.ssl_pre(h).flatten()
         output = self.Prediction(h[:, 0, :])
         if norm:
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
