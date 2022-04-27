@@ -200,8 +200,8 @@ class GT_SSL(nn.Module):
                 GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation=activation))
         self.Prediction = nn.Linear(
             embeddings_dimension, num_class, bias=False)
-        self.ssl_pre = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(), 
-            nn.Linear(embeddings_dimension, 1, bias=False))
+        #self.ssl_pre = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(), nn.Linear(embeddings_dimension, 1, bias=False))
+        self.ssl_pre = nn.Linear(embeddings_dimension, 1, bias=False)
         #self.reset_parameters()
 
     def reset_parameters(self):
