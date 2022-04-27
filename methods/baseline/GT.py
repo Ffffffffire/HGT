@@ -169,6 +169,100 @@ class GT(nn.Module):
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output
 
+    def forward(self, features_list, seqs, norm=False):
+        h = []
+        for fc, feature in zip(self.fc_list, features_list):
+            h.append(fc(feature))
+        h = torch.cat(h, 0)
+        h = h[seqs]
+        if self.glo:
+            h = torch.cat(
+                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
+        for layer in range(self.num_layers):
+            h = self.GTLayers[layer](h)
+        #h = h[:,0,:] + h[:,1:,:].mean(dim=1)
+        output = self.Prediction(h[:, 0, :])
+        if norm:
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+        return output
+
+
+class GT_SSL(nn.Module):
+    def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, activation='relu', num_glo=0):
+        '''
+            embeddings_dimension: d = dp = dk = dq
+            multi-heads: n
+            
+        '''
+
+        super(GT_SSL, self).__init__()
+
+        self.embeddings_dimension = embeddings_dimension
+        self.num_layers = num_layers
+        self.num_class = num_class
+        self.nheads = nheads
+        self.fc_list = nn.ModuleList([nn.Linear(
+            in_dim, embeddings_dimension, bias=False) for in_dim in input_dimensions])
+        self.glo = num_glo > 0
+
+        if self.glo:
+            self.globalembedding = torch.nn.Parameter(
+                torch.empty(num_glo, embeddings_dimension))
+            nn.init.xavier_normal_(self.globalembedding)
+
+        self.dropout = dropout
+
+        self.GTLayers = torch.nn.ModuleList()
+        for layer in range(self.num_layers):
+            self.GTLayers.append(
+                GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation=activation))
+        self.Prediction = nn.Linear(
+            embeddings_dimension, num_class, bias=False)
+        self.ssl_pre = nn.Sequential(nn.Linear(embeddings_dimension, embeddings_dimension, bias=False), nn.ReLU(), 
+            nn.Linear(embeddings_dimension, 1), bias=False)
+        #self.reset_parameters()
+
+    def reset_parameters(self):
+        gain = nn.init.calculate_gain('relu')
+
+        for fc in self.fc_list:
+            nn.init.kaiming_uniform_(fc.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.Prediction.weight, nonlinearity='relu')
+
+    def forward(self, features_list, seqs, norm=False):
+        h = []
+        for fc, feature in zip(self.fc_list, features_list):
+            h.append(fc(feature))
+        h = torch.cat(h, 0)
+        h = h[seqs]
+        if self.glo:
+            h = torch.cat(
+                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
+        for layer in range(self.num_layers):
+            h = self.GTLayers[layer](h)
+        output_ssl = self.ssl_pre(h).squeeze(2)
+        output = self.Prediction(h[:, 0, :])
+        if norm:
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+        return output, output_ssl
+
+    def forward(self, features_list, seqs, norm=False):
+        h = []
+        for fc, feature in zip(self.fc_list, features_list):
+            h.append(fc(feature))
+        h = torch.cat(h, 0)
+        h = h[seqs]
+        if self.glo:
+            h = torch.cat(
+                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
+        for layer in range(self.num_layers):
+            h = self.GTLayers[layer](h)
+        #h = h[:,0,:] + h[:,1:,:].mean(dim=1)
+        output = self.Prediction(h[:, 0, :])
+        if norm:
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+        return output
+
 class RGT(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=4, dropout=0.5, rl_dimension=4, ifcat=True, GNN='SAGE', activation='relu', num_glo = 0):
 
