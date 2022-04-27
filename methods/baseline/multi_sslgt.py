@@ -241,7 +241,7 @@ def run_model_DBLP(args):
                 #logits = net(features_list, val_seq, type_emb,node_type, val_adjs, args.K)
                 logits, _ = net(features_list, val_seq, args.usenorm)
                 logp = F.sigmoid(logits)
-                val_loss = loss(logp, labels[val_idx])
+                val_loss = criterion(logp, labels[val_idx])
                 pred = (logits.cpu().numpy() > 0).astype(int)
                 print(dl.evaluate_valid(pred, dl.labels_train['data'][val_idx]))
 
