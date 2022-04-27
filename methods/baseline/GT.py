@@ -169,24 +169,6 @@ class GT(nn.Module):
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output
 
-    def forward(self, features_list, seqs, norm=False):
-        h = []
-        for fc, feature in zip(self.fc_list, features_list):
-            h.append(fc(feature))
-        h = torch.cat(h, 0)
-        h = h[seqs]
-        if self.glo:
-            h = torch.cat(
-                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
-        for layer in range(self.num_layers):
-            h = self.GTLayers[layer](h)
-        #h = h[:,0,:] + h[:,1:,:].mean(dim=1)
-        output = self.Prediction(h[:, 0, :])
-        if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
-        return output
-
-
 class GT_SSL(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, activation='relu', num_glo=0):
         '''
@@ -246,23 +228,6 @@ class GT_SSL(nn.Module):
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output, output_ssl
 
-    def forward(self, features_list, seqs, norm=False):
-        h = []
-        for fc, feature in zip(self.fc_list, features_list):
-            h.append(fc(feature))
-        h = torch.cat(h, 0)
-        h = h[seqs]
-        if self.glo:
-            h = torch.cat(
-                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
-        for layer in range(self.num_layers):
-            h = self.GTLayers[layer](h)
-        #h = h[:,0,:] + h[:,1:,:].mean(dim=1)
-        output = self.Prediction(h[:, 0, :])
-        if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
-        return output
-
 class RGT(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=4, dropout=0.5, rl_dimension=4, ifcat=True, GNN='SAGE', activation='relu', num_glo = 0):
 
@@ -303,7 +268,7 @@ class RGT(nn.Module):
         self.GTLayers = torch.nn.ModuleList()
         for layer in range(self.num_layers):
             self.GTLayers.append(
-                GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation, self.ifcat==False, rl_dimension))
+                GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation, self.ifcat, rl_dimension))
         
         self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
         
@@ -335,7 +300,7 @@ class RGT(nn.Module):
                 [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
         for layer in range(self.num_layers):
             if self.ifcat:
-                h = self.GTLayers[layer](h)
+                h = self.GTLayers[layer](h, r)
             else:
                 h = self.GTLayers[layer](h, r)
         output = self.Prediction(h[:, 0, :])
