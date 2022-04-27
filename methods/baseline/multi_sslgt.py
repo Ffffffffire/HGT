@@ -175,7 +175,7 @@ def run_model_DBLP(args):
     degree_seq = degree[train_seq]
     node_type = [features.shape[0] for features in features_list]
     node_type = torch.tensor(
-        [i for i, z in zip(range(len(node_type)), node_type) for x in range(z)])
+        [i for i, z in zip(range(len(node_type)), node_type) for x in range(z)]).float()
     type_seq = node_type[train_seq]
 
     if args.ssl == 'dist':
