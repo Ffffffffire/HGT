@@ -308,5 +308,6 @@ if __name__ == '__main__':
     ap.add_argument('--dataset', type=str)
     ap.add_argument('--mode', type=int, default=0)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--alpha', type=float, default=0.5)
     args = ap.parse_args()
     run_model_DBLP(args)
