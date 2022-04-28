@@ -73,7 +73,6 @@ class GTLayer(nn.Module):
             nn.init.constant_(self.FFN2.bias, 0)
 
     def forward(self, h, rh=None, mask=None, e=1e-12):
-        h = self.dropout(h)
         q = self.linear_q(h)
         k = self.linear_k(h)
         v = self.linear_v(h)
