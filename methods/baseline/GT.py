@@ -73,6 +73,7 @@ class GTLayer(nn.Module):
             nn.init.constant_(self.FFN2.bias, 0)
 
     def forward(self, h, rh=None, mask=None, e=1e-12):
+        h = self.dropout(h)
         q = self.linear_q(h)
         k = self.linear_k(h)
         v = self.linear_v(h)
@@ -100,18 +101,20 @@ class GTLayer(nn.Module):
         context = score @ v_
 
         h_sa = context.view(batch_size, -1, self.head_dim * self.nheads)
-        h_sa = self.linear_final(h_sa)
         h_sa = self.dropout(h_sa)
+        h_sa = self.linear_final(h_sa)
+        
 
+        h_sa = self.dropout(h_sa)
         h1 = self.LN1(h_sa + h)
-        h1 = self.dropout(h1)
         
         hf = self.activation(self.FFN1(h1))
         hf = self.dropout(hf)
         hf = self.FFN2(hf)
 
+        hf = self.dropout(hf)
         h2 = self.LN2(h1+hf)
-        h2 = self.dropout(h2)
+        
 
         return h2
 
