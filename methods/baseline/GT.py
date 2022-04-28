@@ -113,6 +113,8 @@ class GTLayer(nn.Module):
 
         hf = self.dropout(hf)
         h2 = self.LN2(h1+hf)
+
+        h2 = self.dropout(h2)
         
 
         return h2
