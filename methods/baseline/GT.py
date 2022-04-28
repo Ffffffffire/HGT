@@ -168,6 +168,21 @@ class GT(nn.Module):
         if norm:
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output
+    def mixup_forward(self, features_list, seqs, idx, alpha, norm=False):
+        h = []
+        for fc, feature in zip(self.fc_list, features_list):
+            h.append(fc(feature))
+        h = torch.cat(h, 0)
+        h = alpha * h[seqs] + (1 - alpha) * h[seqs[idx]]
+        if self.glo:
+            h = torch.cat(
+                [h, self.globalembedding.expand(h.shape[0], -1, -1)], dim=1)
+        for layer in range(self.num_layers):
+            h = self.GTLayers[layer](h)
+        output = self.Prediction(h[:, 0, :])
+        if norm:
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+        return output
 
 class GT_SSL(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=2, dropout=0, activation='relu', num_glo=0):
@@ -227,6 +242,7 @@ class GT_SSL(nn.Module):
         if norm:
             output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output, output_ssl
+
 
 class RGT(nn.Module):
     def __init__(self, num_class, input_dimensions, embeddings_dimension=64, ffn_dimension=128, num_layers=8, nheads=4, dropout=0.5, rl_dimension=4, ifcat=True, GNN='SAGE', activation='relu', num_glo = 0):

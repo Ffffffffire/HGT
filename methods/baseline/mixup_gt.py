@@ -78,12 +78,11 @@ def len_seq_min_max(seqs):
         len_seq[i] = len(seqs[i])
     print("Max Len: %d Mean Len: %.4f Min Len: %d" % (len_seq.max().item(), len_seq.mean().item(), len_seq.min().item()))
 
-def mixup_data(x, y, alpha=0.5):
+def mixup_data(size, y, alpha=0.5):
     alpha = np.random.beta(alpha, alpha)
-    index = torch.randperm(x.size()[0]).cuda()
-    x_a, x_b = x, x[index,:]
+    index = torch.randperm(size).cuda()
     y_a, y_b = y, y[index]
-    return x_a, x_b, y_a, y_b, alpha
+    return index, y_a, y_b, alpha
 
 def run_model_DBLP(args):
     feats_type = args.feats_type
@@ -196,9 +195,10 @@ def run_model_DBLP(args):
             # training
             net.train()
 
-            logits = net(features_list, train_seq, args.usenorm)
-            x_a,x_b,y_a,y_b,alpha=mixup_data(logits, labels[train_idx], args.alpha)
-            logp = F.log_softmax(alpha * x_a + (1-alpha) * x_b, 1)
+            idx, y_a, y_b, alpha = mixup_data(train_seq.shape[0], labels[train_idx], args.alpha)
+
+            logits = net.mixup_forward(features_list, train_seq, idx, alpha, args.usenorm)
+            logp = F.log_softmax(logits, 1)
             train_loss = alpha * \
                 F.nll_loss(logp, y_a) + (1-alpha) * F.nll_loss(logp, y_b)
 
