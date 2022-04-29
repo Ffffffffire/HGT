@@ -92,8 +92,7 @@ def mixup_data(size, y, alpha=0.5):
 
 def run_model_DBLP(args):
     feats_type = args.feats_type
-    features_list, adjM, labels, train_val_test_idx, dl = load_data(
-        args.dataset, args.seed)
+    features_list, adjM, labels, train_val_test_idx, dl = load_data(args.dataset)
     device = torch.device('cuda:' + str(args.device)
                           if torch.cuda.is_available() else 'cpu')
     features_list = [mat2tensor(features).to(device)
@@ -310,7 +309,6 @@ if __name__ == '__main__':
     ap.add_argument('--K', type=int, default=3)
     ap.add_argument('--dataset', type=str)
     ap.add_argument('--mode', type=int, default=0)
-    ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--alpha', type=float, default=0.5)
     args = ap.parse_args()
     run_model_DBLP(args)

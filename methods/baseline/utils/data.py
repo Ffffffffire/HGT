@@ -7,7 +7,7 @@ import scipy
 import scipy.sparse as sp
 
 
-def load_data(prefix='DBLP',seed=0):
+def load_data(prefix='DBLP'):
     from scripts.data_loader import data_loader
     dl = data_loader('../../data/'+prefix)
     features = []
@@ -21,7 +21,6 @@ def load_data(prefix='DBLP',seed=0):
     labels = np.zeros((dl.nodes['count'][0], dl.labels_train['num_classes']), dtype=int)
     val_ratio = 0.2
     train_idx = np.nonzero(dl.labels_train['mask'])[0]
-    np.random.seed(seed)
     np.random.shuffle(train_idx)
     split = int(train_idx.shape[0]*val_ratio)
     val_idx = train_idx[:split]
