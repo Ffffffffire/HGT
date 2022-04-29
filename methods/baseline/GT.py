@@ -100,9 +100,7 @@ class GTLayer(nn.Module):
         context = score @ v_
 
         h_sa = context.view(batch_size, -1, self.head_dim * self.nheads)
-        h_sa = self.dropout(h_sa)
         h_sa = self.linear_final(h_sa)
-        
 
         h_sa = self.dropout(h_sa)
         h1 = self.LN1(h_sa + h)
@@ -114,8 +112,7 @@ class GTLayer(nn.Module):
         hf = self.dropout(hf)
         h2 = self.LN2(h1+hf)
 
-        h2 = self.dropout(h2)
-        
+        #h2 = self.dropout(h2)
 
         return h2
 
