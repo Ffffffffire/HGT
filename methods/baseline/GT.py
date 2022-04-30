@@ -54,7 +54,7 @@ class GTLayer(nn.Module):
         #self.BN1 = nn.BatchNorm1d(100)
         #self.BN2 = nn.BatchNorm1d(100)
 
-        self.reset_parameters()
+        #self.reset_parameters()
 
     def reset_parameters(self, bias = False):
         nn.init.xavier_uniform_(self.linear_k.weight, gain=1 / math.sqrt(2))
@@ -137,7 +137,7 @@ class GT(nn.Module):
             self.GTLayers.append(
                 GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation=activation))
         self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
-        self.reset_parameters()
+        #self.reset_parameters()
 
     def reset_parameters(self):
         for fc in self.fc_list:
