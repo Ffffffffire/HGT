@@ -105,11 +105,12 @@ class GTLayer(nn.Module):
         h_sa = self.dropout(h_sa)
         h1 = self.LN1(h_sa + h)
         
+        h1 = self.dropout(h1)
+
         hf = self.activation(self.FFN1(h1))
         hf = self.dropout(hf)
         hf = self.FFN2(hf)
 
-        hf = self.dropout(hf)
         h2 = self.LN2(h1+hf)
 
         h2 = self.dropout(h2)
@@ -182,7 +183,7 @@ class GT(nn.Module):
             h = self.GTLayers[layer](h)
         output = self.Prediction(h[:, 0, :])
         if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+            output = output / torch.norm(output, dim=1, keepdim=True)
         return output
 
 class GT_SSL(nn.Module):

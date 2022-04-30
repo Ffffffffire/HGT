@@ -174,87 +174,95 @@ def run_model_DBLP(args):
 
     g = g.to(device)
 
-    for i in range(args.repeat):
-        
-        net = GT(num_classes, in_dims, args.hidden_dim, args.ffn_dim, args.num_layers, args.num_heads, args.dropout,activation = 'leakyrelu', num_glo= args.num_g)
+    print("Tuning: " + " hidden_dim ")
 
-        net.to(device)
-        optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.999)
+    hp_set = [32, 64, 128, 256]
 
-        # training loop
-        net.train()
-        early_stopping = EarlyStopping(patience=args.patience, verbose=True,
-                                       save_path='checkpoint/gt_{}_{}.pt'.format(args.dataset, args.num_layers))
-        for epoch in range(args.epoch):
-            t_start = time.time()
-            # training
+    for hyper_parameter in hp_set: 
+
+        for i in range(args.repeat):
+            
+            net = GT(num_classes, in_dims, hyper_parameter, hyper_parameter, args.num_layers, args.num_heads, args.dropout, activation = 'leakyrelu', num_glo= args.num_g)
+
+            net.to(device)
+            optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+
+            # training loop
             net.train()
+            early_stopping = EarlyStopping(patience=args.patience, verbose=True,
+                                        save_path='checkpoint/gt_{}_{}.pt'.format(args.dataset, args.num_layers))
+            for epoch in range(args.epoch):
+                t_start = time.time()
+                # training
+                net.train()
 
-            logits = net(features_list, train_seq, args.usenorm)
-            logp = F.log_softmax(logits, 1)
-            train_loss = F.nll_loss(logp, labels[train_idx])
+                logits = net(features_list, train_seq, args.usenorm)
+                logp = F.log_softmax(logits, 1)
+                train_loss = F.nll_loss(logp, labels[train_idx])
 
-            # autograd
-            optimizer.zero_grad()
-            train_loss.backward()
-            optimizer.step()
-            scheduler.step()
+                # autograd
+                optimizer.zero_grad()
+                train_loss.backward()
+                optimizer.step()
+                scheduler.step()
 
-            t_end = time.time()
+                t_end = time.time()
 
-            # print training info
-            print('Epoch {:05d} | Train_Loss: {:.4f} | Time: {:.4f}'.format(
-                epoch, train_loss.item(), t_end-t_start))
+                # print training info
+                print('Epoch {:05d} | Train_Loss: {:.4f} | Time: {:.4f}'.format(
+                    epoch, train_loss.item(), t_end-t_start))
 
-            t_start = time.time()
+                t_start = time.time()
 
-            #print('Train torch.cuda.memory_allocated():',torch.cuda.memory_allocated() / 1024 / 1024)
-            # validation
+                #print('Train torch.cuda.memory_allocated():',torch.cuda.memory_allocated() / 1024 / 1024)
+                # validation
+                net.eval()
+                with torch.no_grad():
+                    #logits = net(features_list, val_seq, type_emb,node_type, val_adjs, args.K)
+                    logits = net(features_list, val_seq, args.usenorm)
+                    logp = F.log_softmax(logits, 1)
+                    val_loss = F.nll_loss(logp, labels[val_idx])
+                    pred = logits.cpu().numpy().argmax(axis=1)
+                    onehot = np.eye(num_classes, dtype=np.int32)
+                    pred = onehot[pred]
+                    print(dl.evaluate_valid(pred, dl.labels_train['data'][val_idx]))
+
+                    #print('Valid torch.cuda.memory_allocated():',torch.cuda.memory_allocated() / 1024 / 1024)
+        
+                scheduler.step(val_loss)
+                t_end = time.time()
+                # print validation info
+                print('Epoch {:05d} | Val_Loss {:.4f} | Time(s) {:.4f}'.format(
+                    epoch, val_loss.item(), t_end - t_start))
+                # early stopping
+                early_stopping(val_loss, net)
+                if early_stopping.early_stop:
+                    print('Early stopping!')
+                    break
+
+            # testing with evaluate_results_nc
+            net.load_state_dict(torch.load(
+                'checkpoint/gt_{}_{}.pt'.format(args.dataset, args.num_layers)))
             net.eval()
             with torch.no_grad():
-                #logits = net(features_list, val_seq, type_emb,node_type, val_adjs, args.K)
-                logits = net(features_list, val_seq, args.usenorm)
-                logp = F.log_softmax(logits, 1)
-                val_loss = F.nll_loss(logp, labels[val_idx])
-                pred = logits.cpu().numpy().argmax(axis=1)
-                onehot = np.eye(num_classes, dtype=np.int32)
-                pred = onehot[pred]
-                print(dl.evaluate_valid(pred, dl.labels_train['data'][val_idx]))
+                logits = net(features_list, test_seq, args.usenorm)
+                test_logits = logits
+                if args.mode == 1:
+                    pred = test_logits.cpu().numpy().argmax(axis=1)
+                    dl.gen_file_for_evaluate(test_idx=test_idx, label=pred, file_name=f"{args.dataset}_{i+1}.txt")
+                else:
+                    pred = test_logits.cpu().numpy().argmax(axis=1)
+                    onehot = np.eye(num_classes, dtype=np.int32)
+                    pred = onehot[pred]
+                    result = dl.evaluate_valid(pred, dl.labels_test['data'][test_idx])
+                    print(result)
+                    micro_f1[i] = result['micro-f1']
+                    macro_f1[i] = result['macro-f1']
+        print('hidden dim: ', str(hyper_parameter))
+        print('Micro-f1: %.4f, std: %.4f' % (micro_f1.mean().item(), micro_f1.std().item()))
+        print('Macro-f1: %.4f, std: %.4f' % (macro_f1.mean().item(), macro_f1.std().item()))
 
-                #print('Valid torch.cuda.memory_allocated():',torch.cuda.memory_allocated() / 1024 / 1024)
-    
-            t_end = time.time()
-            # print validation info
-            print('Epoch {:05d} | Val_Loss {:.4f} | Time(s) {:.4f}'.format(
-                epoch, val_loss.item(), t_end - t_start))
-            # early stopping
-            early_stopping(val_loss, net)
-            if early_stopping.early_stop:
-                print('Early stopping!')
-                break
-
-        # testing with evaluate_results_nc
-        net.load_state_dict(torch.load(
-            'checkpoint/gt_{}_{}.pt'.format(args.dataset, args.num_layers)))
-        net.eval()
-        with torch.no_grad():
-            logits = net(features_list, test_seq, args.usenorm)
-            test_logits = logits
-            if args.mode == 1:
-                pred = test_logits.cpu().numpy().argmax(axis=1)
-                dl.gen_file_for_evaluate(test_idx=test_idx, label=pred, file_name=f"{args.dataset}_{i+1}.txt")
-            else:
-                pred = test_logits.cpu().numpy().argmax(axis=1)
-                onehot = np.eye(num_classes, dtype=np.int32)
-                pred = onehot[pred]
-                result = dl.evaluate_valid(pred, dl.labels_test['data'][test_idx])
-                print(result)
-                micro_f1[i] = result['micro-f1']
-                macro_f1[i] = result['macro-f1']
-    print('Micro-f1: %.4f, std: %.4f' % (micro_f1.mean().item(), micro_f1.std().item()))
-    print('Macro-f1: %.4f, std: %.4f' % (macro_f1.mean().item(), macro_f1.std().item()))
-    #dl.gen_file_for_evaluate(test_idx=test_idx, label=pred, file_name=f"{args.dataset}_{i+1}.txt")
  
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
@@ -278,16 +286,16 @@ if __name__ == '__main__':
     ap.add_argument('--num-heads', type=int, default=8,
                     help='Number of the attention heads. Default is 8.')
     ap.add_argument('--epoch', type=int, default=1000, help='Number of epochs.')
-    ap.add_argument('--patience', type=int, default=100, help='Patience.')
+    ap.add_argument('--patience', type=int, default=50, help='Patience.')
     ap.add_argument('--repeat', type=int, default=5,
                     help='Repeat the training and testing for N times. Default is 1.')
     ap.add_argument('--num-layers', type=int, default=2)
-    ap.add_argument('--lr', type=float, default=1e-3)
+    ap.add_argument('--lr', type=float, default=1e-4)
     ap.add_argument('--dropout', type=float, default=0.5)
-    ap.add_argument('--weight-decay', type=float, default=0)
+    ap.add_argument('--weight-decay', type=float, default=1e-5)
     ap.add_argument('--len-seq', type=int, default=120)
     ap.add_argument('--drop-ratio', type=float, default=1)
-    ap.add_argument('--usenorm', type=bool, default=False)
+    ap.add_argument('--usenorm', type=bool, default=True)
     ap.add_argument('--rl_type', type=str, default='GIN')
     ap.add_argument('--rl_node', type=bool, default=False)
     ap.add_argument('--is_add', type=bool, default=False)
