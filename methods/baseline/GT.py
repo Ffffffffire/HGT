@@ -275,6 +275,8 @@ class RGT(nn.Module):
         elif self.gnn == 'GIN':
             self.rl_w = nn.Sequential(
                 nn.Linear(rl_dimension, rl_dimension, bias=False), nn.ReLU, nn.Dropout(self.dropout), nn.Linear(rl_dimension, rl_dimension, bias=False))
+        
+        self.rl_first = nn.Linear(4, rl_dimension, bias=False)
 
         self.GTLayers = torch.nn.ModuleList()
         for layer in range(self.num_layers):
