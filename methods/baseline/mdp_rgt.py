@@ -192,7 +192,7 @@ def run_model_DBLP(args):
 
     print("Tuning: " + "rl dim")
 
-    hp_set = [4, 8, 16, 32, 64]
+    hp_set = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     for hyper_parameter in hp_set:
 

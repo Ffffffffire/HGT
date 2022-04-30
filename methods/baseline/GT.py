@@ -88,6 +88,7 @@ class GTLayer(nn.Module):
         if mask is not None:
             score = score.masked_fill(mask == 0, -e)
 
+        score = F.softmax(score, dim = 1)
         score = F.softmax(score, dim = -1)
         context = score @ v_
 
@@ -172,7 +173,7 @@ class GT(nn.Module):
             h = self.GTLayers[layer](h)
         output = self.Prediction(h[:, 0, :])
         if norm:
-            output = output / torch.norm(output, dim=1, keepdim=True)
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output
 
 class GT_SSL(nn.Module):
@@ -318,7 +319,7 @@ class RGT(nn.Module):
                 h = self.GTLayers[layer](h, r)
         output = self.Prediction(h[:, 0, :])
         if norm:
-            output = output / torch.norm(output, dim=1, keepdim=True)
+            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
         return output
 
     def relational_encoding(self, seqs, type_emb, node_type, adjs, K, norm = False):
@@ -342,7 +343,7 @@ class RGT(nn.Module):
             r = self.non_linear(r)
             r = self.rdropout(r)
             if norm:
-                r =  r / torch.norm(r, dim=2, keepdim=True)
+                r =  r / (torch.norm(r, dim=2, keepdim=True) + 1e-12)
         return r
 
 

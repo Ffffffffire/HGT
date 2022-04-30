@@ -190,7 +190,7 @@ def run_model_DBLP(args):
 
     g = g.to(device)
 
-    print("Tuning: " + " rl_dim ")
+    print("Tuning: " + " K")
 
     hp_set = [4, 8, 16, 32, 64]
 

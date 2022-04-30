@@ -174,15 +174,16 @@ def run_model_DBLP(args):
 
     g = g.to(device)
 
-    print("Tuning: " + " hidden_dim ")
+    print("Tuning: " + "layers")
 
-    hp_set = [32, 64, 128, 256]
+    hp_set = [1,2,3,4,5]
 
     for hyper_parameter in hp_set: 
 
         for i in range(args.repeat):
             
-            net = GT(num_classes, in_dims, hyper_parameter, hyper_parameter, args.num_layers, args.num_heads, args.dropout, activation = 'leakyrelu', num_glo= args.num_g)
+            net = GT(num_classes, in_dims, args.hidden_dim, args.hidden_dim, hyper_parameter,
+                     args.num_heads, args.dropout, activation='leakyrelu', num_glo=args.num_g)
 
             net.to(device)
             optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -258,7 +259,7 @@ def run_model_DBLP(args):
                     print(result)
                     micro_f1[i] = result['micro-f1']
                     macro_f1[i] = result['macro-f1']
-        print('hidden dim: ', str(hyper_parameter))
+        print('layer: ', str(hyper_parameter))
         print('Micro-f1: %.4f, std: %.4f' % (micro_f1.mean().item(), micro_f1.std().item()))
         print('Macro-f1: %.4f, std: %.4f' % (macro_f1.mean().item(), macro_f1.std().item()))
 
