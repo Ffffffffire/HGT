@@ -205,7 +205,6 @@ def run_model_DBLP(args):
                 optimizer.zero_grad()
                 train_loss.backward()
                 optimizer.step()
-                scheduler.step()
 
                 t_end = time.time()
 
