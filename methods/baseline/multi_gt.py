@@ -200,7 +200,7 @@ def run_model_DBLP(args):
                 net.train()
 
                 logits = net(features_list, train_seq, args.usenorm)
-                logp = F.sigmoid(logits)
+                logp = logits.sigmoid()
                 train_loss = loss(logp, labels[train_idx])
 
                 # autograd
@@ -224,7 +224,7 @@ def run_model_DBLP(args):
                 with torch.no_grad():
                     #logits = net(features_list, val_seq, type_emb,node_type, val_adjs, args.K)
                     logits = net(features_list, val_seq, args.usenorm)
-                    logp = F.sigmoid(logits)
+                    logp = logits.sigmoid()
                     val_loss = loss(logp, labels[val_idx])
                     pred = (logits.cpu().numpy() > 0).astype(int)
                     print(dl.evaluate_valid(pred, dl.labels_train['data'][val_idx]))
