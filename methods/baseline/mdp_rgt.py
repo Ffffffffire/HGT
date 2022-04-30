@@ -190,15 +190,15 @@ def run_model_DBLP(args):
 
     g = g.to(device)
 
-    print("Tuning: " + "rl_dim ")
+    print("Tuning: " + "rl dim")
 
-    hp_set = [4, 8, 16, 32]
+    hp_set = [4, 8, 16, 32, 64]
 
     for hyper_parameter in hp_set:
 
         for i in range(args.repeat):
 
-            net = RGT(num_classes, in_dims, args.hidden_dim, args.ffn_dim, args.num_layers, args.num_heads, args.dropout, activation='leakyrelu', num_glo=args.num_g, rl_dimension=4, ifcat=args.ifcat, GNN=args.rl_type)
+            net = RGT(num_classes, in_dims, args.hidden_dim, args.ffn_dim, args.num_layers, args.num_heads, args.dropout, activation='leakyrelu', num_glo=args.num_g, rl_dimension=hyper_parameter, ifcat=args.ifcat, GNN=args.rl_type)
 
             net.to(device)
             optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
