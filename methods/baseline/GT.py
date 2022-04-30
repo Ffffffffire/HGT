@@ -244,6 +244,7 @@ class RGT(nn.Module):
         self.nheads = nheads
         self.ifcat = ifcat
         self.gnn = GNN
+        self.activation = activation
 
         if self.ifcat:
             self.fc_list = nn.ModuleList([nn.Linear(
@@ -259,7 +260,12 @@ class RGT(nn.Module):
             self.globalembedding = torch.nn.Parameter(torch.empty(num_glo, embeddings_dimension))
             nn.init.xavier_normal_(self.globalembedding, gain)
 
-        #self.rl_first = nn.Linear(4, rl_dimension, bias=False)
+        if self.activation == 'relu':
+            self.non_linear = nn.ReLU()
+        else:
+            self.non_linear = nn.LeakyReLU(0.2)
+        
+        self.rdropout = nn.Dropout(self.dropout)
 
         if self.gnn == 'SAGE':
             self.rl_self = nn.Linear(rl_dimension, rl_dimension // 2, bias=False)
@@ -268,12 +274,12 @@ class RGT(nn.Module):
             self.rl_w = nn.Linear(rl_dimension, rl_dimension, bias=False)
         elif self.gnn == 'GIN':
             self.rl_w = nn.Sequential(
-                nn.Linear(rl_dimension, rl_dimension, bias=False), nn.ReLU, nn.Linear(rl_dimension, rl_dimension, bias=False))
+                nn.Linear(rl_dimension, rl_dimension, bias=False), nn.ReLU, nn.Dropout(self.dropout), nn.Linear(rl_dimension, rl_dimension, bias=False))
 
         self.GTLayers = torch.nn.ModuleList()
         for layer in range(self.num_layers):
             self.GTLayers.append(
-                GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation, self.ifcat, rl_dimension))
+                GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, self.activation, self.ifcat, rl_dimension))
         
         self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
         
@@ -310,28 +316,31 @@ class RGT(nn.Module):
                 h = self.GTLayers[layer](h, r)
         output = self.Prediction(h[:, 0, :])
         if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+            output = output / torch.norm(output, dim=1, keepdim=True)
         return output
 
     def relational_encoding(self, seqs, type_emb, node_type, adjs, K, norm = False):
         node_type = [i for i, z in zip(
             range(len(node_type)), node_type) for x in range(z)]
         r_0 = type_emb[node_type]
-        r = r_0[seqs]
-        #r = self.rl_first(r_0)       
+        r = self.rl_first(r_0)  
+        r = r[seqs]
+        flag = r_0[seqs]
         masks = torch.zeros(adjs.shape).to(torch.device('cuda:0'))
-        r[:, 0, :] = r[:, 0, :] * 2
+        flag[:, 0, :] = flag[:, 0, :] * 2
         for _ in range(K):
-            source_id = torch.nonzero(r.sum(dim=2) != 1)
+            source_id = torch.nonzero(flag.sum(dim=2) != 1)
             masks[source_id[0], :, source_id[1]] = 1
             madjs = torch.mul(adjs, masks)
             neighbor = torch.matmul(madjs, r)
+            flag = torch.matmul(madjs, flag)
             output_self = self.rl_self(r)
             output_neighbor = self.rl_neighbor(neighbor)
             r = torch.cat([output_self, output_neighbor], dim=2)
-            #r = F.relu(r)
+            r = self.non_linear(r)
+            r = self.rdropout(r)
             if norm:
-                r =  r / (torch.norm(r, dim=2, keepdim=True)+1e-12)
+                r =  r / torch.norm(r, dim=2, keepdim=True)
         return r
 
 
