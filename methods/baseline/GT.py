@@ -54,23 +54,15 @@ class GTLayer(nn.Module):
         #self.BN1 = nn.BatchNorm1d(100)
         #self.BN2 = nn.BatchNorm1d(100)
 
-        #self.reset_parameters(bias=True)
+        self.reset_parameters()
 
     def reset_parameters(self, bias = False):
-        #gain = nn.init.calculate_gain('relu')
-        #nn.init.kaiming_uniform_(self.linear_q.weight, nonlinearity='relu')
-        #nn.init.kaiming_uniform_(self.linear_k.weight, nonlinearity='relu')
-        #nn.init.kaiming_uniform_(self.linear_v.weight, nonlinearity='relu')
-        #nn.init.kaiming_uniform_(self.linear_final.weight, nonlinearity='relu')
-        #nn.init.kaiming_uniform_(self.FFN1.weight, nonlinearity='relu')
-        #nn.init.kaiming_uniform_(self.FFN2.weight, nonlinearity='relu')
-        if bias == True:
-            #nn.init.constant_(self.linear_q.bias, 0)
-            #nn.init.constant_(self.linear_k.bias, 0)
-            #nn.init.constant_(self.linear_v.bias, 0)
-            nn.init.constant_(self.linear_final.bias, 0)
-            nn.init.constant_(self.FFN1.bias, 0)
-            nn.init.constant_(self.FFN2.bias, 0)
+        nn.init.xavier_uniform_(self.linear_k.weight, gain=1 / math.sqrt(2))
+        nn.init.xavier_uniform_(self.linear_q.weight, gain=1 / math.sqrt(2))
+        nn.init.xavier_uniform_(self.linear_v.weight, gain=1 / math.sqrt(2))
+        nn.init.xavier_uniform_(self.linear_final.weight)
+        nn.init.xavier_uniform_(self.FFN1.weight)
+        nn.init.xavier_uniform_(self.FFN2.weight)
 
     def forward(self, h, rh=None, mask=None, e=1e-12):
         q = self.linear_q(h)
@@ -91,7 +83,7 @@ class GTLayer(nn.Module):
             r_k_ = r_k.unsqueeze(1)
             r_q_ = r_q.unsqueeze(1)
             r_k_t = r_k_.view(batch_size, 1, self.rl_dim, length)
-            score += (r_q_ @ r_k_t) / 2
+            score += (r_q_ @ r_k_t) / math.sqrt(self.rl_dim)
 
         if mask is not None:
             score = score.masked_fill(mask == 0, -e)
@@ -112,7 +104,6 @@ class GTLayer(nn.Module):
         hf = self.FFN2(hf)
 
         h2 = self.LN2(h1+hf)
-
         h2 = self.dropout(h2)
 
         return h2
@@ -146,14 +137,12 @@ class GT(nn.Module):
             self.GTLayers.append(
                 GTLayer(self.embeddings_dimension, ffn_dimension, self.nheads, self.dropout, activation=activation))
         self.Prediction = nn.Linear(embeddings_dimension, num_class, bias = False)
-        #self.reset_parameters()
+        self.reset_parameters()
 
     def reset_parameters(self):
-        gain = nn.init.calculate_gain('relu')
-
         for fc in self.fc_list:
-            nn.init.kaiming_uniform_(fc.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.Prediction.weight, nonlinearity='relu')
+            nn.init.xavier_uniform_(fc.weight)
+        nn.init.xavier_uniform_(self.Prediction.weight)
 
     def forward(self, features_list, seqs, norm=False):
         h = []
@@ -168,7 +157,7 @@ class GT(nn.Module):
         #h = h[:,0,:] + h[:,1:,:].mean(dim=1)
         output = self.Prediction(h[:,0,:])
         if norm:
-            output = output / (torch.norm(output, dim=1, keepdim=True)+1e-12)
+            output = output / torch.norm(output, dim=1, keepdim=True)
         return output
     def mixup_forward(self, features_list, seqs, idx, alpha, norm=False):
         h = []
@@ -222,11 +211,9 @@ class GT_SSL(nn.Module):
         #self.reset_parameters()
 
     def reset_parameters(self):
-        gain = nn.init.calculate_gain('relu')
-
         for fc in self.fc_list:
-            nn.init.kaiming_uniform_(fc.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.Prediction.weight, nonlinearity='relu')
+            nn.init.xavier_uniform_(fc.weight)
+        nn.init.xavier_uniform_(self.Prediction.weight)
 
     def forward(self, features_list, seqs, norm=False):
         h = []
